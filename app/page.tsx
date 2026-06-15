@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
+import builtinSkuMap from "@/lib/skuMap.json";
 
 type Row = Record<string, string>;
 type SkuMap = Record<string, string>;
@@ -68,7 +69,7 @@ const SKU_COL = "SKU";
 export default function Home() {
   const [rows, setRows] = useState<Row[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
-  const [skuMap, setSkuMap] = useState<SkuMap>({});
+  const [skuMap, setSkuMap] = useState<SkuMap>(builtinSkuMap as SkuMap);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [copied, setCopied] = useState(false);
@@ -94,7 +95,8 @@ export default function Home() {
     setLoadingSku(true);
     try {
       const map = await parseSkuMap(file);
-      setSkuMap(map);
+      // merge with builtin, uploaded takes precedence
+      setSkuMap({ ...(builtinSkuMap as SkuMap), ...map });
     } finally {
       setLoadingSku(false);
     }
@@ -159,8 +161,9 @@ export default function Home() {
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
-            <p className="font-semibold text-gray-700">Mapeamento SKU → Nome do produto</p>
-            <p className="text-sm text-gray-500">Planilha com duas colunas: SKU | Nome (opcional)</p>
+            <p className="font-semibold text-gray-700">Atualizar mapeamento de SKUs</p>
+            <p className="text-sm text-green-600 font-medium">{Object.keys(builtinSkuMap).length} SKUs já carregados automaticamente</p>
+            <p className="text-sm text-gray-500">Opcional: envie uma nova planilha (SKU | Nome) para substituir o mapeamento atual</p>
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -168,9 +171,6 @@ export default function Home() {
               className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-green-50 file:text-green-700 file:font-medium hover:file:bg-green-100 cursor-pointer"
             />
             {loadingSku && <p className="text-sm text-green-500">Carregando...</p>}
-            {Object.keys(skuMap).length > 0 && (
-              <p className="text-sm text-green-600">{Object.keys(skuMap).length} SKUs mapeados</p>
-            )}
           </div>
         </div>
 
