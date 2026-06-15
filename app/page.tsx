@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import builtinSkuMap from "@/lib/skuMap.json";
+import builtinSkuBaseMap from "@/lib/skuBaseMap.json";
 
 type Row = Record<string, string>;
 type SkuMap = Record<string, string>;
@@ -70,8 +71,10 @@ export default function Home() {
   const [rows, setRows] = useState<Row[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [skuMap, setSkuMap] = useState<SkuMap>(builtinSkuMap as SkuMap);
+  const [skuBaseMap, setSkuBaseMap] = useState<SkuMap>(builtinSkuBaseMap as SkuMap);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState("");
   const [copied, setCopied] = useState(false);
   const [loadingMain, setLoadingMain] = useState(false);
   const [loadingSku, setLoadingSku] = useState(false);
@@ -95,21 +98,37 @@ export default function Home() {
     setLoadingSku(true);
     try {
       const map = await parseSkuMap(file);
-      // merge with builtin, uploaded takes precedence
       setSkuMap({ ...(builtinSkuMap as SkuMap), ...map });
+      // rebuild base map from uploaded: first column = sku, second = full name, derive base as full name
+      const baseMap: SkuMap = {};
+      Object.entries(map).forEach(([sku, full]) => { baseMap[sku] = full; });
+      setSkuBaseMap({ ...(builtinSkuBaseMap as SkuMap), ...baseMap });
     } finally {
       setLoadingSku(false);
     }
   }, []);
+
+  const productNames = useMemo(() => {
+    const names = new Set<string>();
+    rows.forEach((row) => {
+      const base = skuBaseMap[String(row[SKU_COL]).trim()];
+      if (base) names.add(base);
+    });
+    return Array.from(names).sort();
+  }, [rows, skuBaseMap]);
 
   const filtered = useMemo(() => {
     return rows.filter((row) => {
       const isoDate = extractDate(row[DATE_COL] || "");
       if (dateFrom && isoDate < dateFrom) return false;
       if (dateTo && isoDate > dateTo) return false;
+      if (selectedProduct) {
+        const base = skuBaseMap[String(row[SKU_COL]).trim()] || "";
+        if (base !== selectedProduct) return false;
+      }
       return true;
     });
-  }, [rows, dateFrom, dateTo]);
+  }, [rows, dateFrom, dateTo, selectedProduct, skuBaseMap]);
 
   const displayCols = useMemo(() => {
     if (columns.length === 0) return [];
@@ -194,11 +213,25 @@ export default function Home() {
                 className="block border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">Produto</label>
+              <select
+                value={selectedProduct}
+                onChange={(e) => setSelectedProduct(e.target.value)}
+                className="block border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 min-w-[180px]"
+              >
+                <option value="">Todos</option>
+                {productNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+
             <button
-              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              onClick={() => { setDateFrom(""); setDateTo(""); setSelectedProduct(""); }}
               className="px-4 py-2 text-sm rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100"
             >
-              Limpar filtro
+              Limpar filtros
             </button>
 
             <div className="ml-auto flex items-center gap-3">
